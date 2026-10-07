@@ -42,7 +42,7 @@ module.exports=async function(req,res){
   const blobPath="design-by-sshk/ai-output/"+id+".png";
   const blob=await put(blobPath,buffer,{access:"private",addRandomSuffix:false,token:blobToken,contentType:"image/png"});
   await sql`update sshk_ai_jobs set status='completed',blob_path=${blob.pathname},completed_at=now() where id=${id}`;
-  return send(res,200,{ok:true,jobId:id,status:"completed",predictionId:prediction.id,blobPath:blob.pathname,blobUrl:blob.url,outputDataUrl:"data:image/png;base64,"+buffer.toString("base64")});
+  return send(res,200,{ok:true,jobId:id,status:"completed",predictionId:prediction.id,blobPath:blob.pathname,blobUrl:blob.url,outputUrl:"/api/output?job="+encodeURIComponent(id)});
  }catch(error){
   const message=String(error&&error.message||error);
   await sql`update sshk_ai_jobs set status='failed',error=${message} where id=${id}`.catch(()=>{});
