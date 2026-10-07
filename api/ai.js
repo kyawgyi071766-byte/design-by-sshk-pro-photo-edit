@@ -11,13 +11,16 @@ module.exports=async function(req,res){
  if(!dbUrl||!token||!blobToken)return send(res,500,{ok:false,error:"Missing production AI/storage/database environment"});
  const sql=neon(dbUrl);
  const id=crypto.randomUUID();
+ const accessToken=crypto.randomBytes(32).toString("hex");
+ const accessHash=crypto.createHash("sha256").update(accessToken).digest("hex");
  const body=req.body||{};
  const prompt=typeof body.prompt==="string"&&body.prompt.trim()?body.prompt.trim():"Create a realistic professional photo.";
  const image=body.inputImage||null;
  const operation=body.operation||"edit";
  try{
-  await sql`create table if not exists sshk_ai_jobs(id text primary key,status text,prompt text,model text,operation text,replicate_prediction_id text,blob_path text,error text,created_at timestamptz default now(),completed_at timestamptz)`;
-  await sql`insert into sshk_ai_jobs(id,status,prompt,model,operation) values(${id},'processing',${prompt},${MODEL},${operation})`;
+  await sql`create table if not exists sshk_ai_jobs(id text primary key,status text,prompt text,model text,operation text,replicate_prediction_id text,blob_path text,error text,access_token_hash text,created_at timestamptz default now(),completed_at timestamptz)`;
+  await sql`alter table sshk_ai_jobs add column if not exists access_token_hash text`;
+  await sql`insert into sshk_ai_jobs(id,status,prompt,model,operation,access_token_hash) values(${id},'processing',${prompt},${MODEL},${operation},${accessHash})`;
   const input={prompt,aspect_ratio:"match_input_image",output_format:"png",safety_tolerance:2};
   if(image){
    if(typeof image!=="string"||image.length>1300000)throw Error("Input image is too large");
@@ -42,7 +45,7 @@ module.exports=async function(req,res){
   const blobPath="design-by-sshk/ai-output/"+id+".png";
   const blob=await put(blobPath,buffer,{access:"private",addRandomSuffix:false,token:blobToken,contentType:"image/png"});
   await sql`update sshk_ai_jobs set status='completed',blob_path=${blob.pathname},completed_at=now() where id=${id}`;
-  return send(res,200,{ok:true,jobId:id,status:"completed",predictionId:prediction.id,blobPath:blob.pathname,blobUrl:blob.url,outputUrl:"/api/output?job="+encodeURIComponent(id)});
+  return send(res,200,{ok:true,jobId:id,status:"completed",predictionId:prediction.id,blobPath:blob.pathname,blobUrl:blob.url,outputUrl:"/api/output?job="+encodeURIComponent(id)+"&token="+encodeURIComponent(accessToken)});
  }catch(error){
   const message=String(error&&error.message||error);
   await sql`update sshk_ai_jobs set status='failed',error=${message} where id=${id}`.catch(()=>{});
