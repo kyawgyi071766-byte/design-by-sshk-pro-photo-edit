@@ -16,8 +16,8 @@ module.exports=async function(req,res){
  const image=body.inputImage||null;
  const operation=body.operation||"edit";
  try{
-  await sql\`create table if not exists sshk_ai_jobs(id text primary key,status text,prompt text,model text,operation text,replicate_prediction_id text,blob_path text,error text,created_at timestamptz default now(),completed_at timestamptz)\`;
-  await sql\`insert into sshk_ai_jobs(id,status,prompt,model,operation) values(${id},'processing',${prompt},${MODEL},${operation})\`;
+  await sql`create table if not exists sshk_ai_jobs(id text primary key,status text,prompt text,model text,operation text,replicate_prediction_id text,blob_path text,error text,created_at timestamptz default now(),completed_at timestamptz)`;
+  await sql`insert into sshk_ai_jobs(id,status,prompt,model,operation) values(${id},'processing',${prompt},${MODEL},${operation})`;
   const input={prompt,aspect_ratio:"match_input_image",output_format:"png",safety_tolerance:2};
   if(image){
    if(typeof image!=="string"||image.length>1300000)throw Error("Input image is too large");
@@ -26,7 +26,7 @@ module.exports=async function(req,res){
   const cr=await fetch("https://api.replicate.com/v1/models/"+MODEL+"/predictions",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","Prefer":"wait=55"},body:JSON.stringify({input})});
   let prediction=await cr.json();
   if(!cr.ok)throw Error(prediction.detail||prediction.error||"Replicate create failed");
-  await sql\`update sshk_ai_jobs set replicate_prediction_id=${prediction.id} where id=${id}\`;
+  await sql`update sshk_ai_jobs set replicate_prediction_id=${prediction.id} where id=${id}`;
   for(let i=0;i<45&&!["succeeded","failed","canceled"].includes(prediction.status);i++){
    await new Promise(r=>setTimeout(r,1500));
    const pr=await fetch("https://api.replicate.com/v1/predictions/"+prediction.id,{headers:{Authorization:"Bearer "+token}});
@@ -41,11 +41,11 @@ module.exports=async function(req,res){
   const buffer=Buffer.from(await outputResponse.arrayBuffer());
   const blobPath="design-by-sshk/ai-output/"+id+".png";
   const blob=await put(blobPath,buffer,{access:"private",addRandomSuffix:false,token:blobToken,contentType:"image/png"});
-  await sql\`update sshk_ai_jobs set status='completed',blob_path=${blob.pathname},completed_at=now() where id=${id}\`;
+  await sql`update sshk_ai_jobs set status='completed',blob_path=${blob.pathname},completed_at=now() where id=${id}`;
   return send(res,200,{ok:true,jobId:id,status:"completed",predictionId:prediction.id,blobPath:blob.pathname,blobUrl:blob.url,outputDataUrl:"data:image/png;base64,"+buffer.toString("base64")});
  }catch(error){
   const message=String(error&&error.message||error);
-  await sql\`update sshk_ai_jobs set status='failed',error=${message} where id=${id}\`.catch(()=>{});
+  await sql`update sshk_ai_jobs set status='failed',error=${message} where id=${id}`.catch(()=>{});
   return send(res,500,{ok:false,jobId:id,error:message});
  }
 };
