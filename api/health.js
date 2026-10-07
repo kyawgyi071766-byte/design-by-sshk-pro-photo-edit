@@ -1,0 +1,1 @@
+module.exports=function(req,res){res.statusCode=200;res.setHeader("content-type","application/json");res.end(JSON.stringify({ok:true,service:"SSHK health"}));};
