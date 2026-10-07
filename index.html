@@ -58,8 +58,57 @@ $("#files").onchange=e=>{importFiles([...e.target.files]);e.target.value=""};$("
 function play(){let v=videoTimeline(),total=totalTimeline();if(!v.length)return alert("Import video first.");S.playing=true;S.timelineTime=clamp(S.timelineTime,0,total);S.clips.filter(c=>c.kind==="audio").forEach(a=>{a.el.currentTime=clamp((S.timelineTime-(a.timelineStart||0))+(a.start||0),a.start||0,a.end??a.el.duration);a.el.volume=a.volume??1;a.el.play().catch(()=>{})});loop()}
 function stop(){S.playing=false;S.clips.forEach(c=>c.el?.pause?.());cancelAnimationFrame(raf);draw()}
 function loop(){if(!S.playing)return;let total=totalTimeline();if(S.timelineTime>=total){stop();S.timelineTime=0;draw();return}S.clips.filter(c=>c.kind==="audio").forEach(a=>{let local=(S.timelineTime-(a.timelineStart||0))+(a.start||0);if(local>=a.start&&local<(a.end??a.el.duration)){a.el.currentTime=local;a.el.playbackRate=a.speed||1;a.el.play().catch(()=>{})}else a.el.pause()});draw();S.timelineTime+=1/30;raf=requestAnimationFrame(loop)}
-async function exportMP4(){let list=videoTimeline();if(!list.length)return alert("Import video first.");$("#status").textContent="Rendering MP4 preview with multi-track audio…";let audioCtx=null,dest=null;try{audioCtx=new AudioContext();dest=audioCtx.createMediaStreamDestination();S.clips.filter(c=>c.kind==="audio").forEach(a=>{try{let n=audioCtx.createMediaElementSource(a.el);n.connect(dest)}catch(e){}})}catch(e){}let vs=cv.captureStream(30),stream=new MediaStream([...vs.getVideoTracks(),...(dest?dest.stream.getAudioTracks():[])]),mime=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"].find(MediaRecorder.isTypeSupported)||"video/webm",r=new MediaRecorder(stream,{mimeType:mime}),chunks=[];r.ondataavailable=e=>e.data.size&&chunks.push(e.data);let done=new Promise(ok=>r.onstop=ok);r.start();S.timelineTime=0;let total=totalTimeline();while(S.timelineTime<total){S.clips.filter(c=>c.kind==="audio").forEach(a=>{let q=(S.timelineTime-(a.timelineStart||0))+(a.start||0);if(q>=a.start&&q<(a.end??a.el.duration)){a.el.currentTime=q;a.el.play().catch(()=>{})}else a.el.pause()});draw();await new Promise(q=>setTimeout(q,33));S.timelineTime+=1/30}r.stop();await done;S.clips.filter(c=>c.kind==="audio").forEach(a=>a.el.pause());let b=new Blob(chunks,{type:mime}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="design-by-sshk-export.webm";a.click();$("#status").textContent="Export complete. WebM includes the rendered timeline audio; convert to MP4 server-side for guaranteed H.264/AAC compatibility.";try{await audioCtx?.close()}catch(e){}}
+async function exportMP4(){
+  let list=videoTimeline();
+  if(!list.length)return alert("Import video first.");
+  $("#status").textContent="Rendering timeline…";
+  let audioCtx=null,dest=null;
+  try{
+    audioCtx=new AudioContext(); dest=audioCtx.createMediaStreamDestination();
+    S.clips.filter(c=>c.kind==="audio").forEach(a=>{try{let n=audioCtx.createMediaElementSource(a.el);n.connect(dest)}catch(e){}});
+  }catch(e){console.warn("Audio graph unavailable",e)}
+  let vs=cv.captureStream(30),stream=new MediaStream([...vs.getVideoTracks(),...(dest?dest.stream.getAudioTracks():[])]);
+  let mime=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"].find(MediaRecorder.isTypeSupported)||"video/webm";
+  let r=new MediaRecorder(stream,{mimeType:mime}),chunks=[];
+  r.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  let done=new Promise(ok=>r.onstop=ok); r.start(); S.timelineTime=0;
+  let total=totalTimeline();
+  while(S.timelineTime<total){
+    S.clips.filter(c=>c.kind==="audio").forEach(a=>{let q=(S.timelineTime-(a.timelineStart||0))+(a.start||0);if(q>=a.start&&q<(a.end??a.el.duration)){a.el.currentTime=q;a.el.play().catch(()=>{})}else a.el.pause()});
+    draw(); await new Promise(q=>setTimeout(q,33)); S.timelineTime+=1/30;
+  }
+  r.stop(); await done; S.clips.filter(c=>c.kind==="audio").forEach(a=>a.el.pause());
+  let webm=new Blob(chunks,{type:mime});
+  if(!window.sshkFfmpegExport){$("#status").textContent="FFmpeg MP4 engine unavailable."; throw Error("FFmpeg engine unavailable");}
+  $("#status").textContent="Converting WebM → H.264/AAC MP4 with FFmpeg…";
+  try{
+    let mp4=await window.sshkFfmpegExport(webm,(p)=>{$("#status").textContent="FFmpeg MP4: "+Math.round(p*100)+"%"});
+    let bytes=new Uint8Array(await mp4.arrayBuffer()),valid=bytes.length>1024&&String.fromCharCode(...bytes.slice(4,8))==="ftyp";
+    if(!valid)throw Error("FFmpeg returned an invalid MP4 container");
+    let a=document.createElement("a");a.href=URL.createObjectURL(mp4);a.download="design-by-sshk-export.mp4";a.click();
+    $("#status").textContent="MP4 export validated: H.264/AAC container, "+Math.round(mp4.size/1024)+" KB.";
+  }catch(e){$("#status").textContent="FFmpeg export failed: "+e.message;throw e}finally{try{await audioCtx?.close()}catch(e){}}
+}
 document.addEventListener("keydown",e=>{if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName))return;if(e.key===" "){e.preventDefault();S.playing?stop():play()}if(e.key==="j"){S.timelineTime=Math.max(0,S.timelineTime-.5);draw()}if(e.key==="l"){S.timelineTime=Math.min(totalTimeline(),S.timelineTime+.5);draw()}if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();undo()}if((e.ctrlKey||e.metaKey)&&e.key==="y"){e.preventDefault();redo()}});
 function render(){panel();renderTracks();inspector();draw()}
 window.addEventListener("beforeunload",()=>{try{localStorage.setItem("sshk-autobackup",snapState())}catch(e){}});(async()=>{panel();render();await loadProject();if(!S.clips.length){let old=localStorage.getItem("sshk-autobackup");if(old)$("#status").textContent="Auto-backup metadata found. Import source media or Save Project to persist files."}})();
-</script></body></html>
+</script>
+<script type="module">
+window.sshkFfmpegExport=async function(webm,onProgress){
+ const {FFmpeg}=await import("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm");
+ const {fetchFile,toBlobURL}=await import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm");
+ if(!window.__sshkFFmpeg){
+  const f=new FFmpeg();
+  f.on("progress",({progress})=>onProgress?.(progress));
+  const base="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
+  await f.load({coreURL:await toBlobURL(base+"/ffmpeg-core.js","text/javascript"),wasmURL:await toBlobURL(base+"/ffmpeg-core.wasm","application/wasm")});
+  window.__sshkFFmpeg=f;
+ }
+ const f=window.__sshkFFmpeg;
+ await f.writeFile("input.webm",await fetchFile(webm));
+ await f.exec(["-i","input.webm","-c:v","libx264","-preset","veryfast","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart","output.mp4"]);
+ const data=await f.readFile("output.mp4");
+ return new Blob([data],{type:"video/mp4"});
+};
+</script>
+</body></html>
