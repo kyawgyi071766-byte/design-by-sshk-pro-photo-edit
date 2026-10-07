@@ -1,6 +1,7 @@
 const {put}=require("@vercel/blob");
 const {neon}=require("@neondatabase/serverless");
 const MODEL=process.env.REPLICATE_MODEL||"black-forest-labs/flux-kontext-pro";
+const MAX_WAIT_MS=Number(process.env.AI_MAX_WAIT_MS||120000);
 function send(res,status,body){res.statusCode=status;res.setHeader("content-type","application/json");res.end(JSON.stringify(body))}
 module.exports=async function(req,res){
  if(req.method==="GET")return send(res,200,{ok:true,service:"SSHK AI",model:MODEL});
@@ -30,7 +31,8 @@ module.exports=async function(req,res){
   let prediction=await cr.json();
   if(!cr.ok)throw Error(prediction.detail||prediction.error||"Replicate create failed");
   await sql`update sshk_ai_jobs set replicate_prediction_id=${prediction.id} where id=${id}`;
-  for(let i=0;i<45&&!["succeeded","failed","canceled"].includes(prediction.status);i++){
+  const deadline=Date.now()+MAX_WAIT_MS;
+  while(Date.now()<deadline&&!["succeeded","failed","canceled"].includes(prediction.status)){
    await new Promise(r=>setTimeout(r,1500));
    const pr=await fetch("https://api.replicate.com/v1/predictions/"+prediction.id,{headers:{Authorization:"Bearer "+token}});
    prediction=await pr.json();
