@@ -1,10 +1,9 @@
-import { put } from "@vercel/blob";
-import { neon } from "@neondatabase/serverless";
 const MODEL=process.env.REPLICATE_MODEL||"black-forest-labs/flux-kontext-pro";
 const send=(res,s,b)=>res.status(s).setHeader("content-type","application/json").json(b);
-export default async function handler(req,res){
+module.exports=async function handler(req,res){
  if(req.method==="GET")return send(res,200,{ok:true,service:"SSHK AI",model:MODEL});
  if(req.method!=="POST")return send(res,405,{ok:false,error:"Method not allowed"});
+ const {put}=await import("@vercel/blob"); const {neon}=await import("@neondatabase/serverless");
  const dbUrl=process.env.STORAGE_DATABASE_URL||process.env.DATABASE_URL,t=process.env.REPLICATE_API_TOKEN,bt=process.env.BLOB_READ_WRITE_TOKEN;
  if(!dbUrl||!t||!bt)return send(res,500,{ok:false,error:"Missing AI/storage/database environment"});
  const sql=neon(dbUrl),id=crypto.randomUUID(),body=req.body||{},prompt=body.prompt||"Create a realistic professional photo.",image=body.inputImage||null,operation=body.operation||"edit";
