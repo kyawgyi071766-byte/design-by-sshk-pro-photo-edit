@@ -1,1 +1,1 @@
-{"cleanUrls":true,"functions":{"api/ai.js":{"maxDuration":300}}}
+{"cleanUrls":true,"functions":{"api/ai.js":{"maxDuration":300},"api/transcribe.js":{"maxDuration":300},"api/tts.js":{"maxDuration":300}}}
