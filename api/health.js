@@ -7,7 +7,7 @@ module.exports=async function(req,res){
    const {neon}=require("@neondatabase/serverless");
    const sql=neon(process.env.STORAGE_DATABASE_URL||process.env.DATABASE_URL);
    await sql`select 1`; db=true;
-   await sql`create table if not exists sshk_ai_jobs(id text primary key,status text,prompt text,model text,operation text,replicate_prediction_id text,blob_path text,error text,created_at timestamptz default now(),completed_at timestamptz)`;
+   await sql`create table if not exists sshk_ai_jobs(id text primary key,status text,prompt text,model text,operation text,replicate_prediction_id text,blob_path text,error text,access_token_hash text,created_at timestamptz default now(),completed_at timestamptz)`;
    const rows=await sql`select to_regclass('public.sshk_ai_jobs') as table_name`;
    table=!!rows[0]?.table_name;
   }
