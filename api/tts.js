@@ -1,4 +1,5 @@
 const {put}=require("@vercel/blob");
+const crypto=require("crypto");
 const MODEL="xai/grok-text-to-speech";
 function send(res,status,body){res.statusCode=status;res.setHeader("content-type","application/json");res.setHeader("cache-control","no-store");res.end(JSON.stringify(body))}
 function hostAllowed(u){try{const h=new URL(u).hostname;return h==="replicate.delivery"||h.endsWith(".replicate.delivery")}catch{return false}}
